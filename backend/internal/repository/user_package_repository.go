@@ -88,3 +88,27 @@ func (r *UserPackageRepository) ConsumeHours(userID uint, hours float64) (float6
 func (r *UserPackageRepository) CreditHours(tx *gorm.DB, up *model.UserPackage) error {
 	return tx.Create(up).Error
 }
+
+// LockActiveByUserTx 事务内行锁会员所有仍有余量的时长包，按原扣减顺序（最接近过期优先，同过期时间按 id 升序）返回。
+func (r *UserPackageRepository) LockActiveByUserTx(tx *gorm.DB, userID uint) ([]model.UserPackage, error) {
+	var list []model.UserPackage
+	err := tx.Clauses(clauseLocking()).
+		Where("user_id = ? AND status = ? AND remaining_hours > 0", userID, "active").
+		Order("expire_at ASC, id ASC").Find(&list).Error
+	return list, err
+}
+
+// LockByIDTx 事务内行锁单个会员时长包。
+func (r *UserPackageRepository) LockByIDTx(tx *gorm.DB, id uint) (*model.UserPackage, error) {
+	var up model.UserPackage
+	err := tx.Clauses(clauseLocking()).First(&up, id).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, ErrNotFound
+	}
+	return &up, err
+}
+
+// SaveTx 事务内保存会员时长包。
+func (r *UserPackageRepository) SaveTx(tx *gorm.DB, up *model.UserPackage) error {
+	return tx.Save(up).Error
+}

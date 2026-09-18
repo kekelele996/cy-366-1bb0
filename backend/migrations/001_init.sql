@@ -100,11 +100,52 @@ CREATE TABLE IF NOT EXISTS sessions (
     duration_minutes INT DEFAULT 0,
     game_type VARCHAR(16) DEFAULT 'other',
     amount DECIMAL(12,2) DEFAULT 0,
-    status VARCHAR(16) DEFAULT 'active',
+    status VARCHAR(16) DEFAULT 'active', -- active/completed/interrupted（故障中断）
     created_at DATETIME(3),
     updated_at DATETIME(3),
     KEY idx_sessions_user (user_id),
     KEY idx_sessions_station (station_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 上机扣费明细：续费/下机每笔余额或时长包扣减一行，故障中断按原始扣减顺序回退。
+CREATE TABLE IF NOT EXISTS session_charges (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    session_id BIGINT UNSIGNED NOT NULL,
+    user_id BIGINT UNSIGNED NOT NULL,
+    user_package_id BIGINT UNSIGNED DEFAULT 0,
+    package_id BIGINT UNSIGNED DEFAULT 0,
+    package_name VARCHAR(64) DEFAULT '',
+    kind VARCHAR(16) DEFAULT 'balance', -- balance/package
+    hours DECIMAL(10,2) DEFAULT 0,
+    amount DECIMAL(12,2) DEFAULT 0,
+    price_per_hour DECIMAL(12,2) DEFAULT 0,
+    biz_type VARCHAR(32) DEFAULT 'session_end',
+    package_expire_at DATETIME(3) NULL,
+    refunded TINYINT(1) DEFAULT 0,
+    refund_kind VARCHAR(16) DEFAULT '', -- balance/hours/expired_cash
+    refunded_amount DECIMAL(12,2) DEFAULT 0,
+    refunded_hours DECIMAL(10,2) DEFAULT 0,
+    created_at DATETIME(3),
+    updated_at DATETIME(3),
+    KEY idx_session_charges_session (session_id),
+    KEY idx_session_charges_user (user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 会员资金/时长流水：扣减与回退统一记账，与机位状态、上机结算同事务落库。
+CREATE TABLE IF NOT EXISTS wallet_flows (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_id BIGINT UNSIGNED NOT NULL,
+    session_id BIGINT UNSIGNED DEFAULT 0,
+    user_package_id BIGINT UNSIGNED DEFAULT 0,
+    direction VARCHAR(16) NOT NULL, -- deduct/refund
+    kind VARCHAR(16) NOT NULL,      -- balance/package_hours
+    biz_type VARCHAR(32) NOT NULL,  -- session_renew/session_end/session_interrupt_refund
+    amount DECIMAL(12,2) DEFAULT 0,
+    hours DECIMAL(10,2) DEFAULT 0,
+    remark VARCHAR(255) DEFAULT '',
+    created_at DATETIME(3),
+    KEY idx_wallet_flows_user (user_id),
+    KEY idx_wallet_flows_session (session_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS tournaments (

@@ -44,6 +44,43 @@ func (r *SessionRepository) FindActiveByStation(stationID uint) (*model.Session,
 	return &s, err
 }
 
+// FindActiveByStationTx 事务内行锁查询机位进行中的上机记录。
+func (r *SessionRepository) FindActiveByStationTx(tx *gorm.DB, stationID uint) (*model.Session, error) {
+	var s model.Session
+	err := tx.Clauses(clauseLocking()).
+		Where("station_id = ? AND status = ?", stationID, "active").First(&s).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, ErrNotFound
+	}
+	return &s, err
+}
+
+// FindLastByStationTx 事务内查询机位最近一条上机记录（用于重复中断的幂等判定）。
+func (r *SessionRepository) FindLastByStationTx(tx *gorm.DB, stationID uint) (*model.Session, error) {
+	var s model.Session
+	err := tx.Clauses(clauseLocking()).
+		Where("station_id = ?", stationID).Order("id DESC").First(&s).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, ErrNotFound
+	}
+	return &s, err
+}
+
+// FindByIDTx 事务内行锁查询上机记录。
+func (r *SessionRepository) FindByIDTx(tx *gorm.DB, id uint) (*model.Session, error) {
+	var s model.Session
+	err := tx.Clauses(clauseLocking()).First(&s, id).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, ErrNotFound
+	}
+	return &s, err
+}
+
+// SaveTx 事务内保存上机记录。
+func (r *SessionRepository) SaveTx(tx *gorm.DB, s *model.Session) error {
+	return tx.Save(s).Error
+}
+
 // Update 更新上机记录。
 func (r *SessionRepository) Update(s *model.Session) error {
 	return r.db.Save(s).Error

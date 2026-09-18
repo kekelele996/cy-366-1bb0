@@ -30,8 +30,26 @@ export function updateStation(id: number, data: Partial<Station>) {
   return put<Station>(`/stations/${id}`, data)
 }
 
+export interface StationInterruptResult {
+  session_id: number
+  station_id: number
+  user_id: number
+  end_time: string
+  duration_minutes: number
+  refund_balance: number
+  refunded_hours: number
+  expired_hours: number
+  expired_cash: number
+  already_interrupted: boolean
+}
+
+export interface StationStatusResult {
+  station: Station
+  interrupt?: StationInterruptResult
+}
+
 export function updateStationStatus(id: number, status: string) {
-  return put<Station>(`/stations/${id}/status`, { status })
+  return put<StationStatusResult>(`/stations/${id}/status`, { status })
 }
 
 export function deleteStation(id: number) {

@@ -14,6 +14,7 @@
               <StatusBadge kind="session" :status="s.status" />
               <van-button v-if="s.status === 'active'" size="mini" type="warning" plain class="op-btn" @click="renew(s)">续费</van-button>
               <van-button v-if="s.status === 'active'" size="mini" type="danger" plain class="op-btn" @click="end(s)">下机</van-button>
+              <van-button v-if="s.status === 'interrupted'" size="mini" type="default" plain class="op-btn" @click="showFlows(s)">流水</van-button>
             </template>
           </van-cell>
         </van-cell-group>
@@ -29,6 +30,22 @@
         </van-cell-group>
       </van-tab>
     </van-tabs>
+
+    <van-popup v-model:show="showFlowPanel" position="bottom" round :style="{ maxHeight: '70%' }">
+      <div class="flow-panel">
+        <div class="flow-title">上机 #{{ flowSessionId }} 扣费/退费流水</div>
+        <van-cell-group inset>
+          <van-cell v-for="f in flows" :key="f.id" :title="f.remark || f.biz_type" :label="`${formatTime(f.created_at)} · ${f.direction === 'refund' ? '退回' : '扣减'}`">
+            <template #value>
+              <span :class="f.direction === 'refund' ? 'flow-refund' : 'flow-deduct'">
+                {{ f.direction === 'refund' ? '+' : '-' }}{{ f.kind === 'package_hours' ? `${f.hours}h` : `¥${f.amount.toFixed(2)}` }}
+              </span>
+            </template>
+          </van-cell>
+          <van-empty v-if="flows.length === 0" description="暂无流水" />
+        </van-cell-group>
+      </div>
+    </van-popup>
   </div>
 </template>
 
@@ -36,7 +53,7 @@
 import { onMounted, ref } from 'vue'
 import { showSuccessToast, showToast } from 'vant'
 import StatusBadge from '@/components/StatusBadge.vue'
-import { listSessions, startSession, renewSession, endSession, getRank, type Session, type RankItem } from '@/api/session'
+import { listSessions, startSession, renewSession, endSession, getRank, getSessionFlows, type Session, type RankItem, type WalletFlow } from '@/api/session'
 import { formatTime, formatDuration } from '@/utils/format'
 
 const tab = ref('list')
@@ -52,6 +69,16 @@ const periodOptions = [
   { text: '近1天', value: 'day' },
 ]
 const startForm = ref({ station_id: '', game_type: 'other' })
+
+const showFlowPanel = ref(false)
+const flowSessionId = ref(0)
+const flows = ref<WalletFlow[]>([])
+
+async function showFlows(s: Session) {
+  flowSessionId.value = s.id
+  flows.value = await getSessionFlows(s.id)
+  showFlowPanel.value = true
+}
 
 async function load() {
   const data = await listSessions({ page: page.value, page_size: pageSize })
@@ -99,4 +126,8 @@ onMounted(() => {
 <style scoped>
 .submit-btn { margin: 12px 16px; }
 .op-btn { margin-left: 6px; }
+.flow-panel { padding: 16px 0 24px; }
+.flow-title { text-align: center; font-weight: 600; padding: 8px 0 12px; }
+.flow-refund { color: #07c160; }
+.flow-deduct { color: #ee0a24; }
 </style>

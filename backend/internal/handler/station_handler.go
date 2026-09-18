@@ -77,6 +77,10 @@ func (h *StationHandler) UpdateStatus(c *gin.Context) {
 		h.abort(c, err)
 		return
 	}
+	if req.Status == constants.StationFault && station.Interrupt != nil {
+		response.OKMessage(c, constants.MsgFaultOK, station)
+		return
+	}
 	response.OKMessage(c, constants.MsgUpdateSuccess, station)
 }
 

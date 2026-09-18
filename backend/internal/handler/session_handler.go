@@ -122,6 +122,21 @@ func (h *SessionHandler) Rank(c *gin.Context) {
 	response.OK(c, list)
 }
 
+// Flows 查询上机记录相关扣费/退费流水（看板与流水回读一致）。
+func (h *SessionHandler) Flows(c *gin.Context) {
+	var idReq dto.IDReq
+	if err := c.ShouldBindUri(&idReq); err != nil {
+		response.Fail(c, 400, constants.CodeValidation, "上机记录 ID 无效")
+		return
+	}
+	list, err := h.sessionService.ListFlows(idReq.ID)
+	if err != nil {
+		h.abort(c, err)
+		return
+	}
+	response.OK(c, list)
+}
+
 // abort 统一错误处理。
 func (h *SessionHandler) abort(c *gin.Context, err error) {
 	var appErr *util.AppError

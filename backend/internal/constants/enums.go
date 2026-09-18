@@ -43,18 +43,51 @@ func IsValidReservationStatus(s string) bool {
 
 // SessionStatus 上机记录状态枚举。
 const (
-	SessionActive    = "active"    // 进行中
-	SessionCompleted = "completed" // 已结束
+	SessionActive      = "active"      // 进行中
+	SessionCompleted   = "completed"   // 已结束
+	SessionInterrupted = "interrupted" // 故障中断（机位标记故障时强制中断）
 )
 
 // IsValidSessionStatus 判断上机记录状态是否合法。
 func IsValidSessionStatus(s string) bool {
 	switch s {
-	case SessionActive, SessionCompleted:
+	case SessionActive, SessionCompleted, SessionInterrupted:
 		return true
 	}
 	return false
 }
+
+// 资金/时长流水方向。
+const (
+	FlowDirectionDeduct = "deduct" // 扣减
+	FlowDirectionRefund = "refund" // 退回
+)
+
+// 流水变更的资产类型。
+const (
+	FlowKindBalance       = "balance"       // 余额
+	FlowKindPackageHours  = "package_hours" // 时长包小时
+)
+
+// 流水业务类型。
+const (
+	FlowBizSessionRenew     = "session_renew"             // 上机续费扣费
+	FlowBizSessionEnd       = "session_end"               // 下机结算扣费
+	FlowBizSessionInterrupt = "session_interrupt_refund"  // 故障中断退费/退时长
+)
+
+// 上机扣费明细的资产类型。
+const (
+	ChargeKindBalance = "balance" // 余额扣费
+	ChargeKindPackage = "package" // 时长包小时扣费
+)
+
+// 故障中断时明细的退还方式。
+const (
+	RefundKindBalance     = "balance"      // 余额原额回补
+	RefundKindHours       = "hours"        // 时长包小时返还
+	RefundKindExpiredCash = "expired_cash" // 上机期间已过期，折算余额
+)
 
 // TournamentStatus 赛事状态枚举。
 const (

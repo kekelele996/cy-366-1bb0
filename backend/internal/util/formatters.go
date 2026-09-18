@@ -30,6 +30,8 @@ func StatusText(status string) string {
 		return "已取消"
 	case "active":
 		return "进行中"
+	case "interrupted":
+		return "故障中断"
 	case "draft":
 		return "草稿"
 	case "open":

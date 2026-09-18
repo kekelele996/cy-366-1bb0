@@ -48,6 +48,8 @@ func migrate(db *gorm.DB) error {
 		&model.PackageOrder{},
 		&model.Reservation{},
 		&model.Session{},
+		&model.SessionCharge{},
+		&model.WalletFlow{},
 		&model.Tournament{},
 		&model.Team{},
 		&model.Registration{},

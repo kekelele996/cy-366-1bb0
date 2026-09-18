@@ -164,9 +164,17 @@ docker compose up -d --build
 | --- | --- | --- | --- |
 | GET | /sessions | 上机记录分页列表 | 登录 |
 | GET | /sessions/rank | 上机时长排行榜（day/week/month + game_type） | 登录 |
+| GET | /sessions/:id/flows | 上机记录扣费/退费流水（看板与流水回读一致） | 登录 |
 | POST | /sessions | 开机上机 | 登录 |
 | POST | /sessions/:id/renew | 续费 | 登录 |
 | POST | /sessions/:id/end | 下机结算 | 登录 |
+
+> **使用中机位标记故障（`PUT /stations/:id/status` 传 `fault`）**：机位进行中的上机会在**同一数据库事务**内被中断（上机状态 `interrupted`），机位状态停在 `fault` 而非空闲。中断按实际使用分钟重算（故障补偿，本次上机金额置 0），已扣费用回退：
+> - 已扣**余额原额回补**到会员账户；
+> - **时长包小时按原始扣减顺序返还**（续费/下机时先扣最接近过期的包，退还时按相同顺序逐项加回）；
+> - 上机期间已过期的时长包**不返还小时**，按时价快照**折算成等额余额**回补；
+> - 费用回补、机位状态、`session_charges` 明细与 `wallet_flows` 流水在同一事务提交，任一步失败全部回滚；
+> - 同一条上机记录重复触发中断只结算一次（已中断时返回 `already_interrupted=true`），看板状态与流水回读一致。响应 `data.interrupt` 带回本次回补余额、返还小时与过期折算金额。
 
 ### 赛事
 
@@ -283,6 +291,13 @@ npm run build
 | 后端 | `backend/internal/constants/enums.go`（定义）、`backend/internal/model/reservation.go`、`backend/internal/dto/reservation_dto.go`（oneof 校验）、`backend/internal/service/reservation_service.go`（状态机 Confirm/Cancel/CheckIn）、`backend/internal/util/formatters.go`（StatusText）、`backend/internal/constants/error_codes.go`（CodeReservation）、`backend/internal/constants/log_templates.go`（reservation_* 模板）、`backend/internal/repository/reservation_repository.go`（CountConflict 状态集合） |
 | 前端 | `frontend/src/constants/index.ts`（RESERVATION_STATUS/TEXT/TYPE）、`frontend/src/components/StatusBadge.vue`、`frontend/src/pages/Reservations.vue`（筛选与操作按钮显隐） |
 
+### 上机记录状态（active / completed / interrupted）
+
+| 端 | 文件 |
+| --- | --- |
+| 后端 | `backend/internal/constants/enums.go`（SessionActive/Completed/Interrupted 及流水方向/业务类型常量）、`backend/internal/model/session.go`、`backend/internal/model/session_charge.go`、`backend/internal/model/wallet_flow.go`、`backend/internal/service/session_service.go`（End/InterruptByStation）、`backend/internal/service/station_service.go`（using→fault 状态机）、`backend/internal/service/interrupt_refund.go`（退费方案）、`backend/internal/util/formatters.go`（StatusText）、`backend/internal/constants/log_templates.go`（session_interrupt_ok/wallet_flow_write 模板）、`backend/internal/repository/session_repository.go`、`backend/internal/repository/session_charge_repository.go`、`backend/internal/repository/wallet_flow_repository.go` |
+| 前端 | `frontend/src/constants/index.ts`（SESSION_STATUS/TEXT/TYPE）、`frontend/src/components/StatusBadge.vue`、`frontend/src/pages/Sessions.vue`（流水回读）、`frontend/src/pages/Stations.vue`（使用中标记故障确认与退费提示）、`frontend/src/api/station.ts`、`frontend/src/api/session.ts` |
+
 ### 赛事状态（draft / open / ready / finished）
 
 | 端 | 文件 |
@@ -297,9 +312,7 @@ npm run build
 | 后端 | `backend/internal/constants/roles.go`、`backend/internal/model/user.go`、`backend/internal/dto/user_dto.go`（oneof）、`backend/internal/middleware/rbac.go`（角色鉴权）、`backend/internal/router/*.go`（路由 RBAC 组合）、`backend/internal/util/formatters.go`（RoleText）、`backend/internal/constants/log_templates.go`（user_* 模板） |
 | 前端 | `frontend/src/constants/index.ts`（USER_ROLE/TEXT）、`frontend/src/hooks/useAuth.ts`（isAdmin/isStaffOrAdmin）、`frontend/src/pages/Stations.vue`/`Reservations.vue`/`Recharge.vue`/`Tournaments.vue`（按钮显隐） |
 
-### 游戏类型（lol / csgo / kog / other）与支付方式（balance / cash / wechat / alipay）
-
-| 端 | 文件 |
+### 游戏类型（lol / csgo / kog / other）与支付方式（balance / cash / wechat / alipay）| 端 | 文件 |
 | --- | --- |
 | 后端 | `backend/internal/constants/enums.go`、`backend/internal/dto/session_dto.go`（oneof）、`backend/internal/dto/tournament_dto.go`（oneof）、`backend/internal/model/session.go`、`backend/internal/service/session_service.go`（defaultGameType）、`backend/internal/util/formatters.go`（GameTypeText） |
 | 前端 | `frontend/src/constants/index.ts`（GAME_TYPE/TEXT、PAYMENT_METHOD/TEXT）、`frontend/src/pages/Sessions.vue`、`frontend/src/pages/Recharge.vue`、`frontend/src/pages/Tournaments.vue` |

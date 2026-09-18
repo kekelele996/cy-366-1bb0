@@ -26,7 +26,7 @@ func TestStationStatusTransition(t *testing.T) {
 		{name: "fault_to_idle", from: constants.StationFault, to: constants.StationIdle, want: true},
 		{name: "reserved_to_idle", from: constants.StationReserved, to: constants.StationIdle, want: true},
 		{name: "using_to_idle", from: constants.StationUsing, to: constants.StationIdle, want: true},
-		{name: "using_to_fault", from: constants.StationUsing, to: constants.StationFault, want: false},
+		{name: "using_to_fault", from: constants.StationUsing, to: constants.StationFault, want: true},
 		{name: "fault_to_using", from: constants.StationFault, to: constants.StationUsing, want: false},
 		{name: "idle_to_idle", from: constants.StationIdle, to: constants.StationIdle, want: true},
 	}

@@ -74,16 +74,33 @@ func (r *UserRepository) List(page, pageSize int) ([]model.User, int64, error) {
 // UpdateBalance 更新余额（扣款时校验余额充足）。
 func (r *UserRepository) UpdateBalance(userID uint, delta float64) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
-		var u model.User
-		if err := tx.Clauses(clauseLocking()).First(&u, userID).Error; err != nil {
-			if errors.Is(err, gorm.ErrRecordNotFound) {
-				return ErrNotFound
-			}
-			return err
-		}
-		if u.Balance+delta < 0 {
-			return ErrConflict
-		}
-		return tx.Model(&model.User{}).Where("id = ?", userID).Update("balance", u.Balance+delta).Error
+		return r.UpdateBalanceTx(tx, userID, delta)
 	})
+}
+
+// LockByIDTx 事务内行锁会员账户。
+func (r *UserRepository) LockByIDTx(tx *gorm.DB, userID uint) (*model.User, error) {
+	var u model.User
+	if err := tx.Clauses(clauseLocking()).First(&u, userID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
+	return &u, nil
+}
+
+// UpdateBalanceTx 事务内更新余额（delta 为正回补、为负扣减，扣减时校验余额充足）。
+func (r *UserRepository) UpdateBalanceTx(tx *gorm.DB, userID uint, delta float64) error {
+	var u model.User
+	if err := tx.Clauses(clauseLocking()).First(&u, userID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return ErrNotFound
+		}
+		return err
+	}
+	if u.Balance+delta < 0 {
+		return ErrConflict
+	}
+	return tx.Model(&model.User{}).Where("id = ?", userID).Update("balance", u.Balance+delta).Error
 }

@@ -13,6 +13,7 @@ func RegisterSession(rg *gin.RouterGroup, h *handler.SessionHandler, jwtSecret s
 	{
 		sessions.GET("", h.List)
 		sessions.GET("/rank", h.Rank)
+		sessions.GET("/:id/flows", h.Flows)
 		sessions.POST("", h.Start)
 		sessions.POST("/:id/renew", h.Renew)
 		sessions.POST("/:id/end", h.End)

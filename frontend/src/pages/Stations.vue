@@ -97,8 +97,25 @@ async function onDetailAction(action: any) {
       load()
     } catch { /* 取消 */ }
   } else {
-    await updateStationStatus(st.id, action.value)
-    showSuccessToast('状态已更新')
+    if (action.value === 'fault' && st.status === 'using') {
+      try {
+        await showConfirmDialog({
+          title: '标记机位故障',
+          message: `机位「${st.name}」正在使用中，标记故障将同时中断进行中的上机，已扣余额原额回补、时长包按原扣顺序返还（上机期间已过期的折算余额），且机位将停在故障状态。确认继续？`,
+        })
+      } catch {
+        return
+      }
+    }
+    const res = await updateStationStatus(st.id, action.value)
+    const it = res.interrupt
+    if (action.value === 'fault' && it) {
+      showSuccessToast(
+        `上机 #${it.session_id} 已中断 · 回补余额 ¥${it.refund_balance.toFixed(2)} · 返还时长 ${it.refunded_hours}h（过期折算 ¥${it.expired_cash.toFixed(2)}）`,
+      )
+    } else {
+      showSuccessToast('状态已更新')
+    }
     load()
   }
 }

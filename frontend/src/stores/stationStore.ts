@@ -10,12 +10,12 @@ export const useStationStore = defineStore('station', () => {
   }
 
   async function changeStatus(id: number, status: string) {
-    const updated = await updateStationStatus(id, status)
+    const res = await updateStationStatus(id, status)
     const idx = stations.value.findIndex((s) => s.id === id)
     if (idx >= 0) {
-      stations.value[idx] = updated
+      stations.value[idx] = res.station
     }
-    return updated
+    return res
   }
 
   return { stations, loadAll, changeStatus }

@@ -47,11 +47,19 @@ export const RESERVATION_STATUS_TYPE: Record<string, string> = {
 export const SESSION_STATUS = {
   ACTIVE: 'active',
   COMPLETED: 'completed',
+  INTERRUPTED: 'interrupted',
 } as const
 
 export const SESSION_STATUS_TEXT: Record<string, string> = {
   active: '进行中',
   completed: '已结束',
+  interrupted: '故障中断',
+}
+
+export const SESSION_STATUS_TYPE: Record<string, string> = {
+  active: 'primary',
+  completed: 'success',
+  interrupted: 'danger',
 }
 
 export const TOURNAMENT_STATUS = {
