@@ -43,15 +43,54 @@ func IsValidReservationStatus(s string) bool {
 
 // SessionStatus 上机记录状态枚举。
 const (
-	SessionActive    = "active"    // 进行中
-	SessionCompleted = "completed" // 已结束
+	SessionActive      = "active"      // 进行中
+	SessionCompleted   = "completed"   // 已结束（正常下机结算）
+	SessionInterrupted = "interrupted" // 已中断（管理员标记机位故障，按实际使用分钟结算）
 )
 
 // IsValidSessionStatus 判断上机记录状态是否合法。
 func IsValidSessionStatus(s string) bool {
 	switch s {
-	case SessionActive, SessionCompleted:
+	case SessionActive, SessionCompleted, SessionInterrupted:
 		return true
+	}
+	return false
+}
+
+// WalletAccountType 钱包账户类型枚举。
+const (
+	WalletAccountBalance = "balance" // 余额账户
+	WalletAccountPackage = "package" // 时长包账户（小时）
+)
+
+// WalletDirection 资金流水方向枚举。
+const (
+	WalletDirDebit  = "debit"  // 出账（扣减）
+	WalletDirCredit = "credit" // 入账（回补/返还）
+)
+
+// WalletChangeType 资金流水业务类型枚举。
+const (
+	WalletChangeRecharge         = "recharge"           // 充值
+	WalletChangeBuyPackage       = "buy_package"        // 购买时长包（余额扣款）
+	WalletChangeConsume          = "consume"            // 上机消费（续费/下机扣费）
+	WalletChangeRefundBalance    = "refund_balance"     // 故障中断退回已扣余额
+	WalletChangeRefundPackage    = "refund_package"     // 故障中断返还时长包小时
+	WalletChangeExpiredToBalance = "expired_to_balance" // 上机期间已过期时长包折算余额
+)
+
+// AllWalletChangeTypes 所有资金流水业务类型。
+var AllWalletChangeTypes = []string{
+	WalletChangeRecharge, WalletChangeBuyPackage, WalletChangeConsume,
+	WalletChangeRefundBalance, WalletChangeRefundPackage, WalletChangeExpiredToBalance,
+}
+
+// IsValidWalletChangeType 判断资金流水业务类型是否合法。
+func IsValidWalletChangeType(s string) bool {
+	for _, v := range AllWalletChangeTypes {
+		if s == v {
+			return true
+		}
 	}
 	return false
 }

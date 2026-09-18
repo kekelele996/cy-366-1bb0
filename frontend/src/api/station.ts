@@ -1,4 +1,5 @@
 import { get, post, put, del } from '@/utils/request'
+import type { Session } from '@/api/session'
 
 export interface Station {
   id: number
@@ -32,6 +33,23 @@ export function updateStation(id: number, data: Partial<Station>) {
 
 export function updateStationStatus(id: number, status: string) {
   return put<Station>(`/stations/${id}/status`, { status })
+}
+
+// 标记故障：使用中机位移交后端中断上机、按实际分钟结算退费，机位停在故障。
+export function markStationFault(id: number) {
+  return post<FaultInterruptResult>(`/stations/${id}/fault`, {})
+}
+
+export interface FaultInterruptResult {
+  station: Station
+  session: Session | null
+  interrupted: boolean
+  actual_minutes: number
+  actual_amount: number
+  refund_balance: number
+  refund_hours: number
+  expired_hours: number
+  expired_balance: number
 }
 
 export function deleteStation(id: number) {

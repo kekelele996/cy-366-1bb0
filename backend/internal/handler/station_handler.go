@@ -17,12 +17,13 @@ import (
 // StationHandler 机位接口处理器。
 type StationHandler struct {
 	stationService *service.StationService
+	sessionService *service.SessionService
 	logger         *slog.Logger
 }
 
 // NewStationHandler 构造机位接口处理器。
-func NewStationHandler(stationService *service.StationService, logger *slog.Logger) *StationHandler {
-	return &StationHandler{stationService: stationService, logger: logger}
+func NewStationHandler(stationService *service.StationService, sessionService *service.SessionService, logger *slog.Logger) *StationHandler {
+	return &StationHandler{stationService: stationService, sessionService: sessionService, logger: logger}
 }
 
 // Create 创建机位。
@@ -132,6 +133,21 @@ func (h *StationHandler) Get(c *gin.Context) {
 		return
 	}
 	response.OK(c, station)
+}
+
+// MarkFault 管理员标记机位故障：使用中的机位移交中断结算（退费+状态+流水同一事务）。
+func (h *StationHandler) MarkFault(c *gin.Context) {
+	var idReq dto.IDReq
+	if err := c.ShouldBindUri(&idReq); err != nil {
+		response.Fail(c, 400, constants.CodeValidation, "机位 ID 无效")
+		return
+	}
+	result, err := h.sessionService.MarkStationFault(idReq.ID)
+	if err != nil {
+		h.abort(c, err)
+		return
+	}
+	response.OKMessage(c, constants.MsgFaultOK, result)
 }
 
 // abort 统一错误处理。

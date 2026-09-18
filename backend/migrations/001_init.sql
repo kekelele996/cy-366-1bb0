@@ -164,6 +164,27 @@ CREATE TABLE IF NOT EXISTS matches (
     KEY idx_matches_tournament (tournament_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+CREATE TABLE IF NOT EXISTS wallet_transactions (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_id BIGINT UNSIGNED NOT NULL,
+    change_type VARCHAR(32) NOT NULL,
+    account_type VARCHAR(16) NOT NULL,
+    direction VARCHAR(8) NOT NULL,
+    amount DECIMAL(12,2) NOT NULL DEFAULT 0,
+    hours DECIMAL(10,2) NOT NULL DEFAULT 0,
+    user_package_id BIGINT UNSIGNED DEFAULT 0,
+    session_id BIGINT UNSIGNED DEFAULT 0,
+    related_id BIGINT UNSIGNED DEFAULT 0,
+    balance_after DECIMAL(12,2) DEFAULT 0,
+    remark VARCHAR(255) DEFAULT '',
+    created_at DATETIME(3),
+    KEY idx_wallet_user (user_id),
+    KEY idx_wallet_session (session_id),
+    KEY idx_wallet_package (user_package_id),
+    KEY idx_wallet_change_type (change_type),
+    KEY idx_wallet_created (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 CREATE TABLE IF NOT EXISTS audit_logs (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     user_id BIGINT UNSIGNED DEFAULT 0,

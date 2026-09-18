@@ -48,6 +48,7 @@ func main() {
 	userPkgRepo := repository.NewUserPackageRepository(db)
 	rechargeRepo := repository.NewRechargeRepository(db)
 	orderRepo := repository.NewPackageOrderRepository(db)
+	walletRepo := repository.NewWalletTransactionRepository(db)
 	reservationRepo := repository.NewReservationRepository(db)
 	sessionRepo := repository.NewSessionRepository(db)
 	tournamentRepo := repository.NewTournamentRepository(db)
@@ -61,9 +62,10 @@ func main() {
 	userService := service.NewUserService(userRepo, logger)
 	stationService := service.NewStationService(stationRepo, logger)
 	packageService := service.NewTimePackageService(packageRepo, logger)
-	rechargeService := service.NewRechargeService(userRepo, rechargeRepo, packageRepo, userPkgRepo, orderRepo, logger)
+	rechargeService := service.NewRechargeService(userRepo, rechargeRepo, packageRepo, userPkgRepo, walletRepo, orderRepo, db, logger)
 	reservationService := service.NewReservationService(reservationRepo, stationService, db, logger)
-	sessionService := service.NewSessionService(sessionRepo, stationService, userPkgRepo, userRepo, reservationRepo, db, logger)
+	sessionService := service.NewSessionService(sessionRepo, stationService, userPkgRepo, userRepo, walletRepo, reservationRepo, db, logger)
+	walletService := service.NewWalletService(walletRepo, logger)
 	tournamentService := service.NewTournamentService(tournamentRepo, teamRepo, regRepo, matchRepo, db, logger)
 	auditService := service.NewAuditService(auditRepo, logger)
 	dashboardService := service.NewDashboardService(db, logger)
@@ -71,7 +73,7 @@ func main() {
 	// 处理器层
 	authHandler := handler.NewAuthHandler(authService, userService, logger)
 	userHandler := handler.NewUserHandler(userService, logger)
-	stationHandler := handler.NewStationHandler(stationService, logger)
+	stationHandler := handler.NewStationHandler(stationService, sessionService, logger)
 	packageHandler := handler.NewTimePackageHandler(packageService, logger)
 	rechargeHandler := handler.NewRechargeHandler(rechargeService, logger)
 	reservationHandler := handler.NewReservationHandler(reservationService, logger)
@@ -79,6 +81,7 @@ func main() {
 	tournamentHandler := handler.NewTournamentHandler(tournamentService, logger)
 	auditHandler := handler.NewAuditHandler(auditService, logger)
 	dashboardHandler := handler.NewDashboardHandler(dashboardService, logger)
+	walletHandler := handler.NewWalletHandler(walletService, logger)
 
 	hub := handler.NewStationHub(logger)
 	go hub.Run()
@@ -115,6 +118,7 @@ func main() {
 	router.RegisterTournament(api, tournamentHandler, cfg.JWTSecret)
 	router.RegisterAudit(api, auditHandler, cfg.JWTSecret)
 	router.RegisterDashboard(api, dashboardHandler, cfg.JWTSecret)
+	router.RegisterWallet(api, walletHandler, cfg.JWTSecret)
 	router.RegisterWS(api, wsHandler)
 
 	srv := &http.Server{

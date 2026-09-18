@@ -16,6 +16,7 @@ const (
 	MsgCheckInOK    = "开机成功"
 	MsgRenewOK      = "续费成功"
 	MsgCheckoutOK   = "下机成功"
+	MsgFaultOK      = "机位已标记故障，进行中上机已中断并完成结算退费"
 	MsgDrawOK       = "抽签分组完成"
 )
 

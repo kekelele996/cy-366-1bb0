@@ -47,11 +47,13 @@ export const RESERVATION_STATUS_TYPE: Record<string, string> = {
 export const SESSION_STATUS = {
   ACTIVE: 'active',
   COMPLETED: 'completed',
+  INTERRUPTED: 'interrupted',
 } as const
 
 export const SESSION_STATUS_TEXT: Record<string, string> = {
   active: '进行中',
   completed: '已结束',
+  interrupted: '故障中断',
 }
 
 export const TOURNAMENT_STATUS = {
@@ -136,3 +138,17 @@ export const STATION_TYPE_TEXT: Record<string, string> = {
 }
 
 export const AREA_OPTIONS = ['A区', 'B区', '包厢区']
+
+export const WALLET_CHANGE_TYPE_TEXT: Record<string, string> = {
+  recharge: '会员充值',
+  buy_package: '购买时长包',
+  consume: '上机消费',
+  refund_balance: '故障退回余额',
+  refund_package: '故障返还时长',
+  expired_to_balance: '过期时长折算余额',
+}
+
+export const WALLET_ACCOUNT_TEXT: Record<string, string> = {
+  balance: '余额',
+  package: '时长包',
+}

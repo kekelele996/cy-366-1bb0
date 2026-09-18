@@ -2,6 +2,7 @@ package repository
 
 import (
 	"errors"
+	"math"
 
 	"gorm.io/gorm"
 
@@ -73,17 +74,43 @@ func (r *UserRepository) List(page, pageSize int) ([]model.User, int64, error) {
 
 // UpdateBalance 更新余额（扣款时校验余额充足）。
 func (r *UserRepository) UpdateBalance(userID uint, delta float64) error {
-	return r.db.Transaction(func(tx *gorm.DB) error {
+	_, err := r.AdjustBalanceTx(nil, userID, delta)
+	return err
+}
+
+// AdjustBalanceTx 事务内行锁调整会员余额，返回变动后的余额。
+// tx 为 nil 时在独立事务内执行。delta 为负表示扣款，余额不足返回 ErrConflict。
+func (r *UserRepository) AdjustBalanceTx(tx *gorm.DB, userID uint, delta float64) (float64, error) {
+	run := func(db *gorm.DB) (float64, error) {
 		var u model.User
-		if err := tx.Clauses(clauseLocking()).First(&u, userID).Error; err != nil {
+		if err := db.Clauses(clauseLocking()).First(&u, userID).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
-				return ErrNotFound
+				return 0, ErrNotFound
 			}
-			return err
+			return 0, err
 		}
-		if u.Balance+delta < 0 {
-			return ErrConflict
+		if roundMoney(u.Balance+delta) < 0 {
+			return 0, ErrConflict
 		}
-		return tx.Model(&model.User{}).Where("id = ?", userID).Update("balance", u.Balance+delta).Error
+		newBalance := roundMoney(u.Balance + delta)
+		if err := db.Model(&model.User{}).Where("id = ?", userID).Update("balance", newBalance).Error; err != nil {
+			return 0, err
+		}
+		return newBalance, nil
+	}
+	if tx != nil {
+		return run(tx)
+	}
+	var balance float64
+	err := r.db.Transaction(func(inner *gorm.DB) error {
+		var err error
+		balance, err = run(inner)
+		return err
 	})
+	return balance, err
+}
+
+// roundMoney 金额保留两位小数，避免浮点尾差导致余额不平。
+func roundMoney(v float64) float64 {
+	return math.Round(v*100) / 100
 }

@@ -53,6 +53,7 @@ func migrate(db *gorm.DB) error {
 		&model.Registration{},
 		&model.Match{},
 		&model.AuditLog{},
+		&model.WalletTransaction{},
 	)
 }
 

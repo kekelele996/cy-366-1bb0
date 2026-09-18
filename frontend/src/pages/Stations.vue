@@ -28,9 +28,9 @@
 
 <script setup lang="ts">
 import { onMounted, ref, computed } from 'vue'
-import { showSuccessToast, showConfirmDialog } from 'vant'
+import { showSuccessToast, showConfirmDialog, showDialog } from 'vant'
 import StatusBadge from '@/components/StatusBadge.vue'
-import { listStations, createStation, updateStation, deleteStation, updateStationStatus, type Station } from '@/api/station'
+import { listStations, createStation, updateStation, deleteStation, updateStationStatus, markStationFault, type Station } from '@/api/station'
 import { STATION_STATUS_TEXT, STATION_TYPE_TEXT, AREA_OPTIONS } from '@/constants'
 import { useAuth } from '@/hooks/useAuth'
 
@@ -60,8 +60,14 @@ const detailActions = computed(() => {
   if (!selected.value) return []
   const acts: any[] = []
   if (isStaffOrAdmin.value) {
-    acts.push({ name: '标记为空闲', value: 'idle' })
-    acts.push({ name: '标记为故障', value: 'fault' })
+    if (selected.value.status === 'using') {
+      acts.push({ name: '标记故障并中断上机（按实际分钟退费）', value: 'fault', color: '#ee0a24' })
+    } else if (selected.value.status !== 'fault') {
+      acts.push({ name: '标记为故障', value: 'fault', color: '#ee0a24' })
+      acts.push({ name: '标记为空闲', value: 'idle' })
+    } else {
+      acts.push({ name: '故障修复，标记为空闲', value: 'idle' })
+    }
     acts.push({ name: '编辑机位', value: 'edit' })
     acts.push({ name: '删除机位', value: 'delete', color: '#ee0a24' })
   }
@@ -96,6 +102,28 @@ async function onDetailAction(action: any) {
       showSuccessToast('删除成功')
       load()
     } catch { /* 取消 */ }
+  } else if (action.value === 'fault') {
+    try {
+      const tip = st.status === 'using'
+        ? `机位「${st.name}」正在使用中，标记故障将中断进行中的上机，按实际使用分钟重算并退回多扣费用，机位停在故障状态。是否继续？`
+        : `确定将机位「${st.name}」标记为故障吗？`
+      await showConfirmDialog({ title: '标记机位故障', message: tip })
+      const res = await markStationFault(st.id)
+      if (res.interrupted && res.session) {
+        const lines = [
+          `实际使用：${res.actual_minutes} 分钟，应付 ¥${res.actual_amount}`,
+          `退回余额：¥${res.refund_balance}`,
+          `返还时长：${res.refund_hours} 小时`,
+        ]
+        if (res.expired_hours > 0) {
+          lines.push(`上机期间过期时长 ${res.expired_hours} 小时已折算余额 ¥${res.expired_balance}`)
+        }
+        showDialog({ title: '故障中断结算完成', message: lines.join('\n'), confirmButtonText: '知道了' })
+      } else {
+        showSuccessToast('机位已标记故障')
+      }
+      load()
+    } catch { /* 取消或冲突提示由拦截器处理 */ }
   } else {
     await updateStationStatus(st.id, action.value)
     showSuccessToast('状态已更新')

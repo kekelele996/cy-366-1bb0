@@ -22,6 +22,8 @@ var LogTemplates = map[string]string{
 	"session_start_ok":       "session start success, userID=%d, stationID=%d, sessionID=%d",
 	"session_renew_ok":       "session renew success, sessionID=%d, addMinutes=%d",
 	"session_end_ok":         "session end success, sessionID=%d, duration=%d, amount=%f",
+	"session_interrupt_ok":   "session interrupted by station fault, stationID=%d, sessionID=%d, duration=%d, actualAmount=%f, refundBalance=%f, refundHours=%f, expiredBalance=%f",
+	"wallet_ledger_write":    "wallet ledger write, userID=%d, changeType=%s, account=%s, direction=%s, amount=%f, hours=%f, sessionID=%d",
 	"session_rank_query":     "session rank query, period=%s, gameType=%s",
 	"tournament_create_ok":   "tournament create success, tournamentID=%d, name=%s",
 	"tournament_publish_ok":  "tournament publish success, tournamentID=%d",

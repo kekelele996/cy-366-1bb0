@@ -11,15 +11,18 @@ import (
 	"github.com/esportsbar/backend/internal/model"
 	"github.com/esportsbar/backend/internal/repository"
 	"github.com/esportsbar/backend/internal/util"
+	"gorm.io/gorm"
 )
 
-// RechargeService 充值与时长的服务。
+// RechargeService 充值与时长包的服务。
 type RechargeService struct {
 	userRepo     *repository.UserRepository
 	rechargeRepo *repository.RechargeRepository
 	packageRepo  *repository.TimePackageRepository
 	userPkgRepo  *repository.UserPackageRepository
+	walletRepo   *repository.WalletTransactionRepository
 	orderRepo    *repository.PackageOrderRepository
+	db           *gorm.DB
 	logger       *slog.Logger
 }
 
@@ -29,25 +32,30 @@ func NewRechargeService(
 	rechargeRepo *repository.RechargeRepository,
 	packageRepo *repository.TimePackageRepository,
 	userPkgRepo *repository.UserPackageRepository,
+	walletRepo *repository.WalletTransactionRepository,
 	orderRepo *repository.PackageOrderRepository,
+	db *gorm.DB,
 	logger *slog.Logger,
 ) *RechargeService {
-	return &RechargeService{userRepo: userRepo, rechargeRepo: rechargeRepo, packageRepo: packageRepo, userPkgRepo: userPkgRepo, orderRepo: orderRepo, logger: logger}
+	return &RechargeService{
+		userRepo:     userRepo,
+		rechargeRepo: rechargeRepo,
+		packageRepo:  packageRepo,
+		userPkgRepo:  userPkgRepo,
+		walletRepo:   walletRepo,
+		orderRepo:    orderRepo,
+		db:           db,
+		logger:       logger,
+	}
 }
 
-// Recharge 会员充值：事务内更新余额并写入充值记录。
+// Recharge 会员充值：事务内更新余额、写充值记录与资金流水。
 func (s *RechargeService) Recharge(req *dto.RechargeReq, operatorID uint) error {
 	if _, err := s.userRepo.FindByID(req.UserID); err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
 			return util.NewAppError(constants.CodeUserNotFound, "会员不存在，无法充值")
 		}
 		return fmt.Errorf("recharge find user: %w", err)
-	}
-	if err := s.userRepo.UpdateBalance(req.UserID, req.Amount); err != nil {
-		if errors.Is(err, repository.ErrConflict) {
-			return util.NewAppError(constants.CodeConflict, "会员余额状态异常")
-		}
-		return fmt.Errorf("recharge update balance: %w", err)
 	}
 	rc := &model.Recharge{
 		UserID:        req.UserID,
@@ -56,14 +64,40 @@ func (s *RechargeService) Recharge(req *dto.RechargeReq, operatorID uint) error 
 		OperatorID:    operatorID,
 		Remark:        req.Remark,
 	}
-	if err := s.rechargeRepo.Create(rc); err != nil {
-		return fmt.Errorf("recharge create record: %w", err)
+	err := s.db.Transaction(func(tx *gorm.DB) error {
+		newBalance, err := s.userRepo.AdjustBalanceTx(tx, req.UserID, req.Amount)
+		if err != nil {
+			if errors.Is(err, repository.ErrConflict) {
+				return util.NewAppError(constants.CodeConflict, "会员余额状态异常")
+			}
+			return fmt.Errorf("recharge update balance: %w", err)
+		}
+		if err := tx.Create(rc).Error; err != nil {
+			return fmt.Errorf("recharge create record: %w", err)
+		}
+		wt := &model.WalletTransaction{
+			UserID:       req.UserID,
+			ChangeType:   constants.WalletChangeRecharge,
+			AccountType:  constants.WalletAccountBalance,
+			Direction:    constants.WalletDirCredit,
+			Amount:       req.Amount,
+			RelatedID:    rc.ID,
+			BalanceAfter: newBalance,
+			Remark:       fmt.Sprintf("会员充值（%s）", req.PaymentMethod),
+		}
+		if err := s.walletRepo.CreateTx(tx, wt); err != nil {
+			return fmt.Errorf("recharge ledger: %w", err)
+		}
+		return nil
+	})
+	if err != nil {
+		return err
 	}
 	s.logger.Info(fmt.Sprintf(constants.LogTemplates["recharge_create_ok"], req.UserID, req.Amount, req.PaymentMethod))
 	return nil
 }
 
-// BuyPackage 购买时长包：事务内扣款、创建订单、发放时长。
+// BuyPackage 购买时长包：事务内扣款、创建订单、发放时长并写资金流水。
 func (s *RechargeService) BuyPackage(userID uint, req *dto.BuyPackageReq) (*model.PackageOrder, error) {
 	pkg, err := s.packageRepo.FindByID(req.PackageID)
 	if err != nil {
@@ -85,17 +119,6 @@ func (s *RechargeService) BuyPackage(userID uint, req *dto.BuyPackageReq) (*mode
 		PaymentMethod: req.PaymentMethod,
 		Status:        constants.OrderPaid,
 	}
-	if req.PaymentMethod == constants.PaymentBalance {
-		if err := s.userRepo.UpdateBalance(userID, -pkg.Price); err != nil {
-			if errors.Is(err, repository.ErrConflict) {
-				return nil, util.NewAppError(constants.CodeInsufficient, "会员余额不足，请先充值")
-			}
-			return nil, fmt.Errorf("buy package deduct balance: %w", err)
-		}
-	}
-	if err := s.orderRepo.Create(order); err != nil {
-		return nil, fmt.Errorf("buy package create order: %w", err)
-	}
 	expireAt := time.Now().AddDate(0, 0, pkg.ValidDays)
 	up := &model.UserPackage{
 		UserID:         userID,
@@ -106,8 +129,49 @@ func (s *RechargeService) BuyPackage(userID uint, req *dto.BuyPackageReq) (*mode
 		ExpireAt:       &expireAt,
 		Status:         "active",
 	}
-	if err := s.userPkgRepo.Create(up); err != nil {
-		return nil, fmt.Errorf("buy package credit hours: %w", err)
+	err = s.db.Transaction(func(tx *gorm.DB) error {
+		if req.PaymentMethod == constants.PaymentBalance {
+			newBalance, err := s.userRepo.AdjustBalanceTx(tx, userID, -pkg.Price)
+			if err != nil {
+				if errors.Is(err, repository.ErrConflict) {
+					return util.NewAppError(constants.CodeInsufficient, "会员余额不足，请先充值")
+				}
+				return fmt.Errorf("buy package deduct balance: %w", err)
+			}
+			if err := s.walletRepo.CreateTx(tx, &model.WalletTransaction{
+				UserID:       userID,
+				ChangeType:   constants.WalletChangeBuyPackage,
+				AccountType:  constants.WalletAccountBalance,
+				Direction:    constants.WalletDirDebit,
+				Amount:       -pkg.Price,
+				BalanceAfter: newBalance,
+				Remark:       fmt.Sprintf("购买时长包「%s」", pkg.Name),
+			}); err != nil {
+				return fmt.Errorf("buy package balance ledger: %w", err)
+			}
+		}
+		if err := tx.Create(order).Error; err != nil {
+			return fmt.Errorf("buy package create order: %w", err)
+		}
+		if err := s.userPkgRepo.CreditHours(tx, up); err != nil {
+			return fmt.Errorf("buy package credit hours: %w", err)
+		}
+		if err := s.walletRepo.CreateTx(tx, &model.WalletTransaction{
+			UserID:        userID,
+			ChangeType:    constants.WalletChangeBuyPackage,
+			AccountType:   constants.WalletAccountPackage,
+			Direction:     constants.WalletDirCredit,
+			Hours:         pkg.Hours,
+			UserPackageID: up.ID,
+			RelatedID:     order.ID,
+			Remark:        fmt.Sprintf("购买时长包「%s」发放小时", pkg.Name),
+		}); err != nil {
+			return fmt.Errorf("buy package hours ledger: %w", err)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
 	s.logger.Info(fmt.Sprintf(constants.LogTemplates["package_order_ok"], userID, pkg.ID, pkg.Price))
 	s.logger.Info(fmt.Sprintf(constants.LogTemplates["user_package_credit"], userID, pkg.ID, pkg.Hours))

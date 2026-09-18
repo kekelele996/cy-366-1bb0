@@ -34,14 +34,31 @@ func (r *SessionRepository) FindByID(id uint) (*model.Session, error) {
 	return &s, err
 }
 
-// FindActiveByStation 查询机位进行中的上机记录。
-func (r *SessionRepository) FindActiveByStation(stationID uint) (*model.Session, error) {
+// LockActiveByStationTx 事务内行锁查询机位进行中的上机记录。
+func (r *SessionRepository) LockActiveByStationTx(tx *gorm.DB, stationID uint) (*model.Session, error) {
 	var s model.Session
-	err := r.db.Where("station_id = ? AND status = ?", stationID, "active").First(&s).Error
+	err := tx.Clauses(clauseLocking()).
+		Where("station_id = ? AND status = ?", stationID, "active").
+		First(&s).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, ErrNotFound
 	}
 	return &s, err
+}
+
+// LockByIDTx 事务内行锁查询上机记录。
+func (r *SessionRepository) LockByIDTx(tx *gorm.DB, id uint) (*model.Session, error) {
+	var s model.Session
+	err := tx.Clauses(clauseLocking()).First(&s, id).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, ErrNotFound
+	}
+	return &s, err
+}
+
+// UpdateTx 事务内更新上机记录。
+func (r *SessionRepository) UpdateTx(tx *gorm.DB, s *model.Session) error {
+	return tx.Save(s).Error
 }
 
 // Update 更新上机记录。
@@ -81,7 +98,7 @@ func (r *SessionRepository) Rank(period string, gameType string, limit int) ([]m
 	}
 	query := r.db.Model(&model.Session{}).
 		Select("user_id, SUM(duration_minutes) AS duration_minutes, COUNT(*) AS session_count").
-		Where("status = ? AND start_time >= ?", "completed", since)
+		Where("status IN ? AND start_time >= ?", []string{"completed", "interrupted"}, since)
 	if gameType != "" {
 		query = query.Where("game_type = ?", gameType)
 	}

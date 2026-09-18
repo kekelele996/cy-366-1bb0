@@ -27,6 +27,25 @@
           <van-cell v-for="o in orders" :key="o.id" :title="o.package_name" :label="o.order_no" :value="`¥${o.amount}`" />
         </van-cell-group>
       </van-tab>
+      <van-tab title="资金流水" name="wallet">
+        <van-notice-bar left-icon="info-o" text="上机扣费与故障退费均按流水记账，可在此回读核对" />
+        <van-cell-group inset>
+          <van-cell
+            v-for="w in walletList"
+            :key="w.id"
+            :title="walletTitle(w)"
+            :label="`${formatTime(w.created_at)}${w.remark ? ' · ' + w.remark : ''}`"
+          >
+            <template #value>
+              <div :style="{ color: w.direction === 'credit' ? '#07c160' : '#ee0a24', textAlign: 'right' }">
+                <div v-if="w.account_type === 'balance'">{{ w.direction === 'credit' ? '+' : '' }}¥{{ Math.abs(w.amount) }}</div>
+                <div v-else>{{ w.direction === 'credit' ? '+' : '-' }}{{ Math.abs(w.hours) }} 小时</div>
+                <div v-if="w.account_type === 'balance'" style="font-size: 12px; color: #969799;">余额 ¥{{ w.balance_after }}</div>
+              </div>
+            </template>
+          </van-cell>
+        </van-cell-group>
+      </van-tab>
     </van-tabs>
   </div>
 </template>
@@ -35,7 +54,8 @@
 import { onMounted, reactive, ref } from 'vue'
 import { showSuccessToast, showToast } from 'vant'
 import { listActivePackages, buyPackage, recharge as rechargeApi, listMyRecharges, listMyOrders, type TimePackage, type Recharge, type PackageOrder } from '@/api/recharge'
-import { PAYMENT_METHOD_TEXT } from '@/constants'
+import { listMyTransactions, type WalletTransaction } from '@/api/wallet'
+import { PAYMENT_METHOD_TEXT, WALLET_CHANGE_TYPE_TEXT } from '@/constants'
 import { formatTime } from '@/utils/format'
 import { useAuth } from '@/hooks/useAuth'
 
@@ -44,16 +64,27 @@ const tab = ref('packages')
 const packages = ref<TimePackage[]>([])
 const recharges = ref<Recharge[]>([])
 const orders = ref<PackageOrder[]>([])
+const walletList = ref<WalletTransaction[]>([])
 const rechargeForm = reactive({ user_id: '', amount: '', payment_method: 'cash' })
+
+function walletTitle(w: WalletTransaction): string {
+  const typeText = WALLET_CHANGE_TYPE_TEXT[w.change_type] || w.change_type
+  return w.session_id ? `${typeText}（上机 #${w.session_id}）` : typeText
+}
 
 async function loadPackages() {
   packages.value = await listActivePackages()
 }
 
 async function loadMine() {
-  const [r, o] = await Promise.all([listMyRecharges({ page: 1, page_size: 20 }), listMyOrders({ page: 1, page_size: 20 })])
+  const [r, o, w] = await Promise.all([
+    listMyRecharges({ page: 1, page_size: 20 }),
+    listMyOrders({ page: 1, page_size: 20 }),
+    listMyTransactions({ page: 1, page_size: 50 }),
+  ])
   recharges.value = r.list
   orders.value = o.list
+  walletList.value = w.list
 }
 
 async function buy(pkg: TimePackage) {

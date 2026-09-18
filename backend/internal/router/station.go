@@ -18,6 +18,8 @@ func RegisterStation(rg *gin.RouterGroup, h *handler.StationHandler, jwtSecret s
 		stations.POST("", middleware.RBAC(constants.RoleAdmin, constants.RoleStaff), h.Create)
 		stations.PUT("/:id", middleware.RBAC(constants.RoleAdmin, constants.RoleStaff), h.Update)
 		stations.PUT("/:id/status", middleware.RBAC(constants.RoleAdmin, constants.RoleStaff), h.UpdateStatus)
+		// 标记故障为业务动作：使用中机位移交上机服务中断结算（非普通状态流转）。
+		stations.POST("/:id/fault", middleware.RBAC(constants.RoleAdmin, constants.RoleStaff), h.MarkFault)
 		stations.DELETE("/:id", middleware.RBAC(constants.RoleAdmin), h.Delete)
 	}
 }

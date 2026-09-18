@@ -131,6 +131,7 @@ docker compose up -d --build
 | POST | /stations | 创建机位 | admin/staff |
 | PUT | /stations/:id | 更新机位 | admin/staff |
 | PUT | /stations/:id/status | 机位状态流转 | admin/staff |
+| POST | /stations/:id/fault | 标记机位故障：使用中机位中断上机、按实际分钟结算退费、机位停在故障 | admin/staff |
 | DELETE | /stations/:id | 删除机位 | admin |
 
 ### 充值与时长包
@@ -167,6 +168,9 @@ docker compose up -d --build
 | POST | /sessions | 开机上机 | 登录 |
 | POST | /sessions/:id/renew | 续费 | 登录 |
 | POST | /sessions/:id/end | 下机结算 | 登录 |
+| GET | /wallet/transactions | 我的资金流水（余额/时长包扣费与故障退费回读） | 登录 |
+
+> 故障中断结算规则（`POST /stations/:id/fault`）：管理员把使用中机位标记故障时，进行中的上机在同一数据库事务内被中断，机位状态停在「故障」而非「空闲」。系统按实际使用分钟重算应付费用，退回多扣部分：已扣余额原额回补；时长包按原扣费顺序返还小时；上机期间已过期的时长包不返还小时、按时价折算成等额余额。费用回补、机位状态、上机记录与资金流水任一步失败则整体回滚；同一条上机记录重复中断只结算一次。
 
 ### 赛事
 
@@ -282,6 +286,20 @@ npm run build
 | --- | --- |
 | 后端 | `backend/internal/constants/enums.go`（定义）、`backend/internal/model/reservation.go`、`backend/internal/dto/reservation_dto.go`（oneof 校验）、`backend/internal/service/reservation_service.go`（状态机 Confirm/Cancel/CheckIn）、`backend/internal/util/formatters.go`（StatusText）、`backend/internal/constants/error_codes.go`（CodeReservation）、`backend/internal/constants/log_templates.go`（reservation_* 模板）、`backend/internal/repository/reservation_repository.go`（CountConflict 状态集合） |
 | 前端 | `frontend/src/constants/index.ts`（RESERVATION_STATUS/TEXT/TYPE）、`frontend/src/components/StatusBadge.vue`、`frontend/src/pages/Reservations.vue`（筛选与操作按钮显隐） |
+
+### 上机记录状态（active / completed / interrupted）
+
+| 端 | 文件 |
+| --- | --- |
+| 后端 | `backend/internal/constants/enums.go`（SessionActive/Completed/Interrupted、IsValidSessionStatus）、`backend/internal/model/session.go`、`backend/internal/service/session_service.go`（Start/End/MarkStationFault 状态机）、`backend/internal/util/formatters.go`（StatusText「故障中断」）、`backend/internal/constants/error_codes.go`（CodeSessionSettled）、`backend/internal/constants/log_templates.go`（session_end_ok/session_interrupt_ok）、`backend/internal/repository/session_repository.go`（进行中锁定、排行榜 completed+interrupted） |
+| 前端 | `frontend/src/constants/index.ts`（SESSION_STATUS/TEXT）、`frontend/src/components/StatusBadge.vue`、`frontend/src/pages/Sessions.vue`（状态徽标与操作按钮） |
+
+### 资金流水类型（recharge / buy_package / consume / refund_balance / refund_package / expired_to_balance）与账户/方向（balance/package、debit/credit）
+
+| 端 | 文件 |
+| --- | --- |
+| 后端 | `backend/internal/constants/enums.go`（WalletAccountType/WalletDirection/WalletChangeType、IsValidWalletChangeType）、`backend/internal/model/wallet_transaction.go`、`backend/internal/repository/wallet_transaction_repository.go`（回读/幂等查询）、`backend/internal/service/session_service.go`（consume 记账、故障退费）、`backend/internal/service/recharge_service.go`（充值/购包记账）、`backend/internal/service/refund_planner.go`（退费重算）、`backend/internal/constants/log_templates.go`（wallet_ledger_write/session_interrupt_ok）、`backend/internal/database/database.go`（AutoMigrate）、`backend/migrations/001_init.sql`（建表） |
+| 前端 | `frontend/src/constants/index.ts`（WALLET_CHANGE_TYPE_TEXT/WALLET_ACCOUNT_TEXT）、`frontend/src/api/wallet.ts`、`frontend/src/pages/Recharge.vue`（资金流水回读页签）、`frontend/src/api/station.ts`（FaultInterruptResult 结算结果） |
 
 ### 赛事状态（draft / open / ready / finished）
 
